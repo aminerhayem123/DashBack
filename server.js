@@ -31,8 +31,9 @@ app.post('/signup', async (req, res) => {
         return res.status(400).json({ error: 'Email already exists.' });
       }
   
+      const hashedPassword = await bcrypt.hash(password, 10); // Hash password
       const insertUserQuery = 'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING *';
-      const result = await pool.query(insertUserQuery, [name, email, password, 'sample_user']);
+      const result = await pool.query(insertUserQuery, [name, email, hashedPassword, 'sample_user']);
       
       res.status(201).json({ message: 'User created successfully!', user: result.rows[0] });
     } catch (err) {
