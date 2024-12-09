@@ -237,6 +237,49 @@ app.get('/profile', async (req, res) => {
   }
 });
 
+// Create a transporter object using SMTP transport
+const transporter = nodemailer.createTransport({
+  service: 'gmail', // or use another email service like SendGrid or SMTP
+  auth: {
+    user: process.env.EMAIL_USER, // your email address
+    pass: process.env.EMAIL_PASS, // your email password
+  },
+});
+
+const sendConfirmationEmail = (userEmail, userName) => {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: userEmail,
+    subject: 'Order Confirmation - Your Purchase Request',
+    html: `
+      <h2>Hello, ${userName}</h2>
+      <p>We have received your order for the pack. Please ensure you complete the money transfer within 3 days.</p>
+      <p>Make sure to include your email in the bank transaction so we can match the payment with your order.</p>
+      <p>Thank you for trusting our service!</p>
+    `,
+  };
+
+  return transporter.sendMail(mailOptions);
+};
+
+app.post('/purchase', async (req, res) => {
+  const { packId, name, email } = req.body;
+
+  try {
+    // Here you can add your purchase logic (e.g., save the order in the database)
+
+    // Send the confirmation email
+    await sendConfirmationEmail(email, name);
+
+    // Respond to the frontend
+    res.status(200).json({ message: 'Purchase successful! Confirmation email sent.' });
+  } catch (error) {
+    console.error('Error processing purchase:', error);
+    res.status(500).json({ error: 'Failed to complete the purchase.' });
+  }
+});
+
+module.exports = { sendConfirmationEmail };
 // Start the Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
