@@ -190,6 +190,17 @@ app.post('/reset-password/:token', async (req, res) => {
   }
 });
 
+// Get Packs Endpoint
+app.get('/packs', async (req, res) => {
+  try {
+    const query = 'SELECT * FROM packs'; // Ensure your table is named 'packs'
+    const result = await pool.query(query);
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error('Error fetching packs:', error);
+    res.status(500).json({ error: 'Failed to fetch packs' });
+  }
+});
 
 // Start the Server
 const PORT = process.env.PORT || 3000;
