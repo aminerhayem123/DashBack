@@ -89,7 +89,7 @@ app.post('/login', async (req, res) => {
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET, // You should define a secret key in your .env file
-      { expiresIn: '1h' } // Token expiration time
+      { expiresIn: '24h' } // Token expiration time
     );
     // Respond with token and user info
     res.json({
@@ -216,7 +216,7 @@ app.get('/profile', async (req, res) => {
     const userId = decoded.id; // Assuming token contains the user id
     
     // Fetch user profile data from the database
-    const query = 'SELECT name, email, coins, total_downloads FROM users WHERE id = $1';
+    const query = 'SELECT name, email, coins, total_downloads, total_purchases FROM users WHERE id = $1';
     const result = await pool.query(query, [userId]);
     
     if (result.rows.length === 0) {
@@ -229,6 +229,7 @@ app.get('/profile', async (req, res) => {
       email: user.email,
       totalCoins: user.coins,
       totalDownloads: user.total_downloads,
+      totalPurchases: user.total_purchases,
     });
   } catch (err) {
     console.error(err);
