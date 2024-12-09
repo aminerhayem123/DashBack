@@ -202,6 +202,40 @@ app.get('/packs', async (req, res) => {
   }
 });
 
+// Profile Endpoint
+app.get('/profile', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1]; // Extract token from Authorization header
+  
+  if (!token) {
+    return res.status(403).json({ error: 'No token provided' });
+  }
+  
+  try {
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id; // Assuming token contains the user id
+    
+    // Fetch user profile data from the database
+    const query = 'SELECT name, email, coins, total_downloads FROM users WHERE id = $1';
+    const result = await pool.query(query, [userId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const user = result.rows[0];
+    res.status(200).json({
+      name: user.name,
+      email: user.email,
+      totalCoins: user.coins,
+      totalDownloads: user.total_downloads,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error fetching profile data' });
+  }
+});
+
 // Start the Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
