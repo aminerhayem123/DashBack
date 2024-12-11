@@ -89,7 +89,7 @@ app.post('/login', async (req, res) => {
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET, // You should define a secret key in your .env file
-      { expiresIn: '30d' } // Token expiration time
+      { expiresIn: '1h' } // Token expiration time
     );
     // Respond with token and user info
     res.json({
@@ -276,6 +276,32 @@ app.post('/purchase', async (req, res) => {
   } catch (error) {
     console.error('Error processing purchase:', error);
     res.status(500).json({ error: 'Failed to complete the purchase.' });
+  }
+});
+// Get all dashboards
+app.get('/dashboards', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM dashboards');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching dashboards:', err);
+    res.status(500).json({ error: 'Failed to fetch dashboards' });
+  }
+});
+// Get a single dashboard by ID
+app.get('/dashboards/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('SELECT * FROM dashboards WHERE id = $1', [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Dashboard not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching dashboard:', err);
+    res.status(500).json({ error: 'Failed to fetch dashboard' });
   }
 });
 
