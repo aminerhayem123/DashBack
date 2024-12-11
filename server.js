@@ -89,7 +89,7 @@ app.post('/login', async (req, res) => {
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET, // You should define a secret key in your .env file
-      { expiresIn: '24h' } // Token expiration time
+      { expiresIn: '30d' } // Token expiration time
     );
     // Respond with token and user info
     res.json({
