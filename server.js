@@ -245,7 +245,7 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS, // your email password
   },
 });
-
+// purshase coins Email
 const sendConfirmationEmail = (userEmail, userName) => {
   const mailOptions = {
     from: process.env.EMAIL_USER,
@@ -261,7 +261,7 @@ const sendConfirmationEmail = (userEmail, userName) => {
 
   return transporter.sendMail(mailOptions);
 };
-
+// purshase coins
 app.post('/purchase', async (req, res) => {
   const { packId, name, email } = req.body;
 
