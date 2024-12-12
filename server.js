@@ -386,7 +386,34 @@ app.post('/purchasedash', async (req, res) => {
     res.status(500).json({ error: 'Failed to complete the purchase.' });
   }
 });
+// Profile Purchase History Endpoint
+app.get('/profile/purchase-history', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  
+  if (!token) {
+    return res.status(403).json({ error: 'No token provided' });
+  }
 
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id;
+
+    const query = `
+      SELECT p.id, p.purchased_at, d.name, d.price_coins, d.preview_url, d.demo_url, 
+             d.technical_details, d.features
+      FROM purchases p
+      JOIN dashboards d ON p.dashboard_id = d.id
+      WHERE p.user_id = $1
+      ORDER BY p.purchased_at DESC
+    `;
+    const result = await pool.query(query, [userId]);
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error fetching purchase history' });
+  }
+});
 
 module.exports = { sendConfirmationEmail };
 // Start the Server
