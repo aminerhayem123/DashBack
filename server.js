@@ -304,6 +304,89 @@ app.get('/dashboards/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch dashboard' });
   }
 });
+// Get a single dashboard by ID
+app.post('/purchasedash', async (req, res) => {
+  const { dashboardIds } = req.body;  // Removed total, we will calculate it based on dashboardIds
+  const token = req.headers.authorization?.split(' ')[1];
+
+  if (!token) {
+    return res.status(403).json({ error: 'No token provided.' });
+  }
+
+  if (!dashboardIds || dashboardIds.length === 0) {
+    return res.status(400).json({ error: 'No dashboard IDs provided.' });
+  }
+
+  try {
+    // Verify token and fetch user
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id;
+
+    // Fetch user coins
+    const userQuery = 'SELECT coins, total_purchases FROM users WHERE id = $1';
+    const userResult = await pool.query(userQuery, [userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const userCoins = userResult.rows[0].coins;
+
+    // Fetch dashboards and calculate total
+    const dashboardQuery = `
+      SELECT id, price_coins
+      FROM dashboards
+      WHERE id = ANY($1::int[])
+    `;
+    const dashboardResult = await pool.query(dashboardQuery, [dashboardIds]);
+
+    if (dashboardResult.rows.length !== dashboardIds.length) {
+      return res.status(400).json({ error: 'Some dashboards were not found.' });
+    }
+
+    const total = dashboardResult.rows.reduce((sum, dashboard) => sum + dashboard.price_coins, 0);
+
+    // Check if the user has enough coins
+    if (userCoins < total) {
+      return res.status(400).json({ error: 'Insufficient coins for this purchase.' });
+    }
+
+    // Start a transaction
+    await pool.query('BEGIN');
+    try {
+      // Deduct coins from user
+      await pool.query('UPDATE users SET coins = coins - $1 WHERE id = $2', [total, userId]);
+
+      // Insert purchases for each dashboard
+      for (const dashboard of dashboardResult.rows) {
+        // Insert the purchase record
+        await pool.query(
+          `INSERT INTO purchases (user_id, dashboard_id, purchased_at) 
+           VALUES ($1, $2, NOW())`,
+          [userId, dashboard.id]
+        );
+      }
+
+      // Increment the total_purchases counter
+      await pool.query(
+        'UPDATE users SET total_purchases = total_purchases + $1 WHERE id = $2',
+        [dashboardIds.length, userId]
+      );
+
+      // Commit the transaction
+      await pool.query('COMMIT');
+      res.status(200).json({ message: 'Purchase successful!' });
+    } catch (error) {
+      // Rollback in case of error
+      await pool.query('ROLLBACK');
+      console.error(error);
+      res.status(500).json({ error: 'Failed to complete the purchase.' });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to complete the purchase.' });
+  }
+});
+
 
 module.exports = { sendConfirmationEmail };
 // Start the Server
