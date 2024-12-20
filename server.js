@@ -261,23 +261,6 @@ const sendConfirmationEmail = (userEmail, userName) => {
 
   return transporter.sendMail(mailOptions);
 };
-// purshase coins
-app.post('/purchase', async (req, res) => {
-  const { packId, name, email } = req.body;
-
-  try {
-    // Here you can add your purchase logic (e.g., save the order in the database)
-
-    // Send the confirmation email
-    await sendConfirmationEmail(email, name);
-
-    // Respond to the frontend
-    res.status(200).json({ message: 'Purchase successful! Confirmation email sent.' });
-  } catch (error) {
-    console.error('Error processing purchase:', error);
-    res.status(500).json({ error: 'Failed to complete the purchase.' });
-  }
-});
 // Get all dashboards
 app.get('/dashboards', async (req, res) => {
   try {
@@ -412,6 +395,155 @@ app.get('/profile/purchase-history', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error fetching purchase history' });
+  }
+});
+
+// Middleware to check if user is admin
+const authMiddleware = async (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  
+  if (!token) {
+    return res.status(403).json({ error: 'No token provided' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.role !== 'super_user') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+// Get all purchase requests
+app.get('/purchase-requests', authMiddleware, async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        pr.id,
+        pr.status,
+        pr.created_at,
+        u.name as user_name,
+        u.email as user_email,
+        p.name as pack_name,
+        p.nb_coins as pack_coins,
+        p.price as pack_price
+      FROM purchase_requests pr
+      JOIN users u ON pr.user_id = u.id
+      JOIN packs p ON pr.pack_id = p.id
+      WHERE pr.status = 'pending'
+      ORDER BY pr.created_at DESC
+    `;
+    
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching purchase requests:', error);
+    res.status(500).json({ error: 'Failed to fetch purchase requests' });
+  }
+});
+
+// Create purchase request
+app.post('/purchase', async (req, res) => {
+  const { packId, name, email } = req.body;
+  const token = req.headers.authorization?.split(' ')[1];
+
+  if (!token) {
+    return res.status(403).json({ error: 'No token provided' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id;
+
+    // Start a transaction
+    await pool.query('BEGIN');
+
+    // Create purchase request
+    const insertQuery = `
+      INSERT INTO purchase_requests (user_id, pack_id, status)
+      VALUES ($1, $2, 'pending')
+      RETURNING id
+    `;
+    await pool.query(insertQuery, [userId, packId]);
+
+    // Send confirmation email
+    await sendConfirmationEmail(email, name);
+
+    await pool.query('COMMIT');
+    res.status(200).json({ message: 'Purchase request created successfully!' });
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    console.error('Error processing purchase:', error);
+    res.status(500).json({ error: 'Failed to complete the purchase request.' });
+  }
+});
+
+// Approve purchase request
+app.post('/purchase-requests/:id/approve', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await pool.query('BEGIN');
+
+    // Get the purchase request details
+    const requestQuery = `
+      SELECT pr.*, p.nb_coins, u.id as user_id
+      FROM purchase_requests pr
+      JOIN packs p ON pr.pack_id = p.id
+      JOIN users u ON pr.user_id = u.id
+      WHERE pr.id = $1 AND pr.status = 'pending'
+    `;
+    const requestResult = await pool.query(requestQuery, [id]);
+
+    if (requestResult.rows.length === 0) {
+      await pool.query('ROLLBACK');
+      return res.status(404).json({ error: 'Purchase request not found or already processed' });
+    }
+
+    const request = requestResult.rows[0];
+
+    // Add coins to user's account
+    await pool.query(
+      'UPDATE users SET coins = coins + $1 WHERE id = $2',
+      [request.nb_coins, request.user_id]
+    );
+
+    // Update request status
+    await pool.query(
+      'UPDATE purchase_requests SET status = $1 WHERE id = $2',
+      ['approved', id]
+    );
+
+    await pool.query('COMMIT');
+    res.json({ message: 'Purchase request approved successfully' });
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    console.error('Error approving purchase request:', error);
+    res.status(500).json({ error: 'Failed to approve purchase request' });
+  }
+});
+
+// Reject purchase request
+app.post('/purchase-requests/:id/reject', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      'UPDATE purchase_requests SET status = $1 WHERE id = $2 AND status = $3 RETURNING id',
+      ['rejected', id, 'pending']
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Purchase request not found or already processed' });
+    }
+
+    res.json({ message: 'Purchase request rejected successfully' });
+  } catch (error) {
+    console.error('Error rejecting purchase request:', error);
+    res.status(500).json({ error: 'Failed to reject purchase request' });
   }
 });
 
