@@ -546,6 +546,35 @@ app.post('/purchase-requests/:id/reject', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Failed to reject purchase request' });
   }
 });
+// add dashboar from dashManger
+app.post('/add_dashboard', authMiddleware, async (req, res) => {
+  const {
+    name,
+    description,
+    price_coins,
+    demo_url,
+    preview_url,
+    features,
+    technical_details,
+    tech,
+    rating,
+  } = req.body;
+
+  try {
+    const query = `
+      INSERT INTO dashboards (name, description, price_coins, demo_url, preview_url, features, technical_details, tech, rating)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id
+    `;
+    const values = [name, description, price_coins, demo_url, preview_url, features, technical_details, tech, rating];
+    const result = await pool.query(query, values);
+
+    res.status(201).json({ message: 'Dashboard added successfully', id: result.rows[0].id });
+  } catch (error) {
+    console.error('Error adding dashboard:', error);
+    res.status(500).json({ error: 'Failed to add dashboard' });
+  }
+});
 
 module.exports = { sendConfirmationEmail };
 // Start the Server
